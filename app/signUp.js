@@ -31,18 +31,19 @@ const SignUp = () => {
   setLoading(true);
 
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name }, // optional metadata
-      },
-    });
+       const { data, error } = await supabase.auth.signUp({
+  email: 'test@example.com',
+  password: 'SuperStrong123!',
+  options: { data: { full_name: 'Test User' } }
+});
+console.log({ data, error });
 
     setLoading(false);
 
     console.log('SignUp Data:', data);
     console.log('SignUp Error:', error);
+
+
 
     if (error) {
       Alert.alert(error.message);
@@ -89,8 +90,6 @@ const SignUp = () => {
               <Input 
                   icon={<Octicons name="mail" size={26} color={theme.colors.text} />}
                   placeholder='Enter your email'
-                  autoCapitalize="none"
-                  keyboardType="email-address"
                   onChangeText={value=> emailRef.current = value}
               />
   

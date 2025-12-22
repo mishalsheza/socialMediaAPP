@@ -1,10 +1,8 @@
-console.log('🚀🚀🚀 EditProfile FILE LOADED 🚀🚀🚀');
-
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Avatar from '../components/Avatar';
 import BackButton from '../components/BackButton';
 import Button from '../components/Button';
@@ -16,21 +14,9 @@ import { hp } from '../helpers/common';
 import { supabase } from '../lib/supabase';
 
 const EditProfile = () => {
-  console.log('🎬 EditProfile COMPONENT RENDERING');
-  
   const router = useRouter();
-  const authContext = useAuth();
+  const { user, setUserData } = useAuth();
   const [loading, setLoading] = useState(false);
-
-  // DEBUG: Check if context exists
-  console.log('🔍 Auth context check:', {
-    contextExists: !!authContext,
-    hasUser: !!authContext?.user,
-    setUserDataType: typeof authContext?.setUserData,
-    setUserDataExists: !!authContext?.setUserData,
-  });
-
-  const { user, setUserData } = authContext || {};
 
   const [form, setForm] = useState({
     name: '',
@@ -40,15 +26,8 @@ const EditProfile = () => {
     address: '',
   });
 
-  // Load current profile
   useEffect(() => {
-    if (!user) {
-      console.log('⚠️ No user found');
-      return;
-    }
-
-    console.log('📱 Loading user data:', user.user_metadata);
-
+    if (!user) return;
     setForm({
       name: user.user_metadata?.full_name || '',
       phoneNumber: user.user_metadata?.phone_number || '',
@@ -58,48 +37,124 @@ const EditProfile = () => {
     });
   }, [user]);
 
-  // Pick image from gallery
-  const onPickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
+  const handleImageSelection = async () => {
+    console.log('📸 Opening Image Picker...');
+    console.log('Platform:', Platform.OS);
+    
+    if (Platform.OS === 'web') {
+      console.log('🌐 Using web file input');
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        
+        input.onchange = (e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = reader.result.split(',')[1];
+              setForm((prev) => ({ 
+                ...prev, 
+                image: {
+                  uri: reader.result,
+                  base64: base64,
+                  mimeType: file.type,
+                }
+              }));
+              console.log('✅ Image selected (web)');
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        
+        input.click();
+      } catch (error) {
+        console.error('❌ Web file picker error:', error);
+        Alert.alert('Error', 'Failed to open file picker');
+      }
+      return;
+    }
 
-    if (!result.canceled) {
-      setForm({ ...form, image: result.assets[0] });
+    console.log('📱 Using mobile image picker');
+    
+    if (!ImagePicker || !ImagePicker.launchImageLibraryAsync) {
+      console.error('❌ ImagePicker not available');
+      Alert.alert('Error', 'Image picker is not available');
+      return;
+    }
+
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('Permission status:', permissionResult.status);
+      
+      if (permissionResult.status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library.');
+        return;
+      }
+
+      const mediaType = ImagePicker.MediaTypeOptions?.Images || 'Images';
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: mediaType,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      console.log('Picker result:', result);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log('✅ Image selected (mobile):', asset.uri);
+        setForm((prev) => ({ ...prev, image: asset }));
+      }
+    } catch (error) {
+      console.error('❌ Mobile image picker error:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
-  // Upload image to Supabase Storage
   const uploadImage = async (asset) => {
     try {
-      const res = await fetch(asset.uri);
-      const blob = await res.blob();
-      const ext = asset.uri.split('.').pop();
+      console.log('⬆️ Starting upload...');
+      const { decode } = require('base64-arraybuffer');
+      
+      // Get proper file extension from mimeType or URI
+      let ext = 'jpg'; // default
+      if (asset.mimeType) {
+        // Convert mime type to extension (e.g., 'image/jpeg' -> 'jpg')
+        ext = asset.mimeType.split('/')[1].replace('jpeg', 'jpg');
+      } else if (asset.uri && !asset.uri.startsWith('data:')) {
+        // Only extract from URI if it's a real file path, not a data URI
+        ext = asset.uri.split('.').pop().split('?')[0];
+      }
+      
       const path = `profiles/${user.id}/${Date.now()}.${ext}`;
+      console.log(`⬆️ Uploading to ${path}`);
+      
+      const { data, error } = await supabase.storage
+        .from('uploads')
+        .upload(path, decode(asset.base64), { 
+            upsert: true,
+            contentType: asset.mimeType || 'image/jpeg'
+        });
 
-      await supabase.storage.from('uploads').upload(path, blob, { upsert: true });
-      const { data } = supabase.storage.from('uploads').getPublicUrl(path);
-      return data.publicUrl;
+      if(error){
+          console.log('❌ Upload Supabase Error:', error);
+          return null;
+      }
+
+      const { data: publicData } = supabase.storage.from('uploads').getPublicUrl(path);
+      console.log('✅ Upload Success. URL:', publicData.publicUrl);
+      return publicData.publicUrl;
     } catch (error) {
-      console.log('Image upload error:', error);
+      console.log('❌ Image upload exception:', error);
       return null;
     }
   };
 
-  // Submit profile changes
   const onSubmit = async () => {
-    console.log('');
-    console.log('='.repeat(50));
-    console.log('🎯 SUBMIT BUTTON CLICKED');
-    console.log('='.repeat(50));
-    console.log('🔍 setUserData check:', {
-      type: typeof setUserData,
-      exists: !!setUserData,
-      isFunction: typeof setUserData === 'function',
-    });
-
     const { name, phoneNumber, bio, address } = form;
 
     if (!name || !phoneNumber || !bio || !address) {
@@ -120,9 +175,7 @@ const EditProfile = () => {
       imageUrl = uploaded;
     }
 
-    // Update the users table
-    console.log('💾 Updating database...');
-    const { error } = await supabase.from('users').upsert({
+    const { error: dbError } = await supabase.from('users').upsert({
       id: user.id,
       name,
       phoneNumber,
@@ -132,41 +185,40 @@ const EditProfile = () => {
       email: user.email,
     });
 
-    setLoading(false);
-
-    if (error) {
-      console.error('❌ DB Update error:', error);
+    if (dbError) {
+      console.error('❌ DB Update error:', dbError);
+      setLoading(false);
       Alert.alert('Error', 'Failed to update profile');
       return;
     }
 
-    console.log('✅ DB updated successfully');
+    const { error: authError } = await supabase.auth.updateUser({
+      data: {
+        full_name: name,
+        phone_number: phoneNumber,
+        bio,
+        address,
+        image: imageUrl,
+      }
+    });
 
-    // Update context for real-time UI reflection
-    const updatedData = {
+    setLoading(false);
+
+    if (authError) {
+      console.error('❌ Auth Update error:', authError);
+      Alert.alert('Error', 'Failed to update profile metadata');
+      return;
+    }
+
+    console.log('✅ Profile updated successfully');
+
+    setUserData({
       name,
       phoneNumber,
       bio,
       address,
       image: imageUrl,
-    };
-
-    console.log('📦 Data to update:', updatedData);
-
-    if (setUserData) {
-      console.log('✅ setUserData exists - calling it now...');
-      try {
-        setUserData(updatedData);
-        console.log('✅ setUserData called successfully!');
-      } catch (err) {
-        console.error('❌ Error calling setUserData:', err);
-      }
-    } else {
-      console.error('❌❌❌ setUserData is UNDEFINED! Context not working!');
-    }
-
-    console.log('='.repeat(50));
-    console.log('');
+    });
 
     Alert.alert('Success', 'Profile updated successfully');
     router.back();
@@ -190,7 +242,7 @@ const EditProfile = () => {
                 size={hp(14)}
                 rounded={theme.radius.xxl * 1.5}
               />
-              <Pressable style={styles.cameraIcon} onPress={onPickImage}>
+              <Pressable style={styles.cameraIcon} onPress={handleImageSelection}>
                 <Feather name="camera" size={20} color={theme.colors.dark} />
               </Pressable>
             </View>
