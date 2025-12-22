@@ -1,4 +1,5 @@
-import { Feather, Octicons } from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -11,6 +12,7 @@ import { theme } from '../constants/themes'
 import { useAuth } from '../contexts/authContext'
 import { hp, wp } from '../helpers/common'
 import { supabase } from '../lib/supabase'
+
 
 const EditProfile = () => {
     const router = useRouter();
@@ -31,35 +33,112 @@ const EditProfile = () => {
             setUserForm({
                 name: user.user_metadata?.full_name || '',
                 phoneNumber: user.user_metadata?.phone_number || '',
-                image: user.image || null,
+                image: user.user_metadata?.image || null,
                 address: user.user_metadata?.address || '',
                 bio: user.user_metadata?.bio || ''
             });
+
+            // Auto-repair profile if image data is corrupted (too large/base64 stored by mistake)
+            const currentImage = user.user_metadata?.image;
+            if (currentImage && (typeof currentImage === 'object' || (typeof currentImage === 'string' && currentImage.length > 5000))) {
+                console.log('Detected corrupted image data. Repairing...');
+                const repairProfile = async () => {
+                    const { data, error } = await supabase.auth.updateUser({
+                        data: { image: null }
+                    });
+                    if (data.user) {
+                        setUserData(data.user);
+                        Alert.alert('Profile Repaired', 'We fixed a glitch in your profile picture. Please upload it again.');
+                    }
+                };
+                repairProfile();
+            }
         }
     }, [user]);
 
-    const onPickImage = async () => {
-        // Image picking logic would go here
-        Alert.alert('Edit Image', 'Image picking functionality to be implemented');
+const onPickImage = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaType.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.7,
+            base64: false, // VERY IMPORTANT
+        }); 
+
+  if (!result.canceled) {
+    setUserForm({ ...userForm, image: result.assets[0] });
+  }
+};
+
+
+    const uploadImage = async (imageAsset) => {
+      try {
+        const { decode } = require('base64-arraybuffer');
+        const fileExt = imageAsset.uri.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `profiles/${user.id}/${fileName}`;
+        
+        const { data, error } = await supabase.storage
+          .from('uploads')
+          .upload(filePath, decode(imageAsset.base64), {
+            contentType: imageAsset.mimeType || 'image/jpeg',
+            upsert: true
+          });
+
+        if (error) {
+             console.log('Upload error: ', error);
+             return null;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('uploads')
+          .getPublicUrl(filePath);
+
+        console.log('Uploaded Image Public URL:', publicUrlData.publicUrl);
+        return publicUrlData.publicUrl;
+
+      } catch (error) {
+        console.log('Image upload exception:', error);
+        return null; 
+      }
     }
 
     const onSubmit = async () => {
         const { name, phoneNumber, bio, address } = userForm;
-        if(!name || !phoneNumber || !address || !bio){
+        if(!name || !phoneNumber || !address || !bio ){
             Alert.alert('Profile', 'Please fill all the fields');
             return;
         }
 
         setLoading(true);
 
+        let imageUrl = userForm.image;
+        if(userForm.image && userForm.image.uri && userForm.image.uri !== user?.user_metadata?.image){
+             const uploadedUrl = await uploadImage(userForm.image);
+             if(uploadedUrl) {
+                 imageUrl = uploadedUrl;
+             } else {
+                 setLoading(false);
+                 Alert.alert('Error', 'Image upload failed');
+                 return;
+             }
+        } else {
+             // Keep existing image string
+             imageUrl = typeof userForm.image === 'string' ? userForm.image : user?.user_metadata?.image;
+        }
+
         const { data, error } = await supabase.auth.updateUser({
             data: {
                 full_name: name,
                 phone_number: phoneNumber,
                 bio,
-                address
+                address,
+                image: imageUrl 
             }
         });
+
+        console.log('Update User Data:', data);
+        console.log('Update User Error:', error);
 
         setLoading(false);
 
@@ -93,7 +172,7 @@ const EditProfile = () => {
             <View style={styles.form}>
                 <View style={styles.avatarContainer}>
                     <Avatar 
-                        uri={userForm.image}
+                        uri={typeof userForm.image === 'object' && userForm.image?.uri ? userForm.image.uri : userForm.image}
                         size={hp(14)}
                         rounded={theme.radius.xxl*1.5}
                     />
@@ -126,7 +205,8 @@ const EditProfile = () => {
                 />
                  {/* Email is typically read-only or requires re-auth to change */}
                  <Input 
-                    icon={<Octicons name="bio" size={24} color={theme.colors.text} />}
+                    icon={<Feather name="file-text" size={24} color={theme.colors.text} />
+}
                     placeholder='Enter your Bio'
                     value={userForm.bio}
                     multiline={true}

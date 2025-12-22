@@ -55,7 +55,7 @@ const Profile = () => {
                     <View style={styles.avatarContainer}>
                         <View style={styles.avatarWrapper}>
                             <Avatar
-                                uri={user?.image}
+                                uri={user?.user_metadata?.image}
                                 size={hp(12)}
                                 rounded={theme.radius.xxl * 1.4}
                             />

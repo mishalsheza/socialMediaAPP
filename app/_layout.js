@@ -21,7 +21,18 @@ const MainLayout = () => {
     }, []);
 
     return (
-        <Stack screenOptions={{headerShown: false}} />
+        <Stack
+            screenOptions={{
+                headerShown: false
+            }}
+        >
+            <Stack.Screen 
+                name="editProfile"
+                options={{
+                    presentation: 'modal'
+                }}
+            />
+        </Stack>
     );
 }
 
