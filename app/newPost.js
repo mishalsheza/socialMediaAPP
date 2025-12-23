@@ -1,19 +1,30 @@
 import { Feather } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { actions, RichEditor, RichToolbar } from 'react-native-pell-rich-editor';
+
+// Import editor only on native or client-side web
+let RichEditor, RichToolbar, actions;
+if (Platform.OS !== 'web' || typeof window !== 'undefined') {
+    const RichEditorLib = require('react-native-pell-rich-editor');
+    RichEditor = RichEditorLib.RichEditor;
+    RichToolbar = RichEditorLib.RichToolbar;
+    actions = RichEditorLib.actions;
+}
 
 import Avatar from '../components/Avatar';
 import BackButton from '../components/BackButton';
@@ -27,35 +38,102 @@ import { supabase } from '../lib/supabase';
 const NewPost = () => {
   const { user } = useAuth();
   const router = useRouter();
-  
+
   const [body, setBody] = useState('');
   const [file, setFile] = useState(null); 
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const videoRef = useRef(null);
   const editorRef = useRef(null);
 
+  const player = useVideoPlayer(file?.type === 'video' ? file.uri : null, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
   const onPick = async (mediaType) => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: mediaType === 'image' 
-        ? 'images' 
-        : 'videos',
-      allowsEditing: true,
-      aspect: [4, 3],
+      mediaTypes:
+        mediaType === 'image'
+          ? ImagePicker.MediaTypeOptions.Images
+          : ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: mediaType === 'image',
       quality: 0.7,
+      videoMaxDuration: 60,
     });
 
-    if (!result.canceled) {
-      setFile(result.assets[0]);
+    if (result.canceled) {
+      return;
     }
+
+    let pickedFile = result.assets[0];
+
+    // Convert HEIC/HEIF images to JPEG
+    if (pickedFile.type === 'image' && pickedFile.uri.toLowerCase().match(/\.(heic|heif)$/)) {
+      const manipResult = await ImageManipulator.manipulateAsync(
+        pickedFile.uri,
+        [],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      pickedFile.uri = manipResult.uri;
+      pickedFile.mimeType = 'image/jpeg';
+    }
+
+    setFile(pickedFile);
   };
 
-  const getFileExtension = (uri, mimeType) => {
-      if (mimeType) {
-          return mimeType.split('/')[1];
+  const uploadFile = async (fileToUpload) => {
+    try {
+      const isImage = fileToUpload.type === 'image';
+      const bucket = isImage ? 'uploads' : 'post-videos';
+      
+      // Determine proper file extension
+      let ext = 'jpg';
+      if (isImage) {
+        if (fileToUpload.mimeType) {
+          ext = fileToUpload.mimeType.split('/')[1].replace('jpeg', 'jpg');
+        }
+      } else {
+        ext = 'mp4'; // Default to mp4 for videos
       }
-      return uri.split('.').pop();
-  }
+      
+      const fileName = `${Date.now()}.${ext}`;
+      const storagePath = `${user.id}/${fileName}`;
+      
+      // Fetch the file and convert to blob
+      const response = await fetch(fileToUpload.uri);
+      const blob = await response.blob();
+      
+      const contentType = isImage ? 'image/jpeg' : 'video/mp4';
+
+      // Upload to Supabase
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, blob, {
+          contentType,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(storagePath);
+
+      return urlData.publicUrl;
+
+    } catch (error) {
+      throw error;
+    }
+  };
 
   const onSubmit = async () => {
     if (!body && !file) {
@@ -69,41 +147,22 @@ const NewPost = () => {
       let filePath = null;
 
       if (file) {
-        const { decode } = require('base64-arraybuffer');
-        const isImage = file.type === 'image';
-        const ext = getFileExtension(file.uri, file.mimeType);
-        const fileName = `${Date.now()}.${ext}`;
-        const storagePath = `post-images/${user.id}/${fileName}`; 
-
-        const fileUri = file.uri;
-        const resp = await fetch(fileUri);
-        const blob = await resp.blob();
-
-        const { data, error: uploadError } = await supabase.storage
-          .from('uploads')
-          .upload(storagePath, blob, {
-            contentType: file.mimeType || (isImage ? 'image/jpeg' : 'video/mp4'),
-            upsert: true
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('uploads')
-          .getPublicUrl(storagePath);
-        
-        filePath = urlData.publicUrl;
+        filePath = await uploadFile(file);
       }
 
-      const { error: dbError } = await supabase
+      const { data: postData, error: dbError } = await supabase
         .from('posts')
         .insert({
           userId: user.id,
           body: body,
           file: filePath,
-        });
+        })
+        .select()
+        .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        throw dbError;
+      }
 
       setLoading(false);
       Alert.alert('Success', 'Post created successfully!');
@@ -111,22 +170,17 @@ const NewPost = () => {
 
     } catch (error) {
       setLoading(false);
-      console.log('Post Error: ', error);
-      Alert.alert('Error', 'Failed to create post');
+      Alert.alert('Error', error.message || 'Failed to create post');
     }
   };
 
   const removeFile = () => {
-      setFile(null);
-  }
-
-
+    setFile(null);
+  };
 
   return (
     <ScreenWrapper bg="white">
       <View style={styles.container}>
-        
-        {/* Header */}
         <View style={styles.header}>
           <BackButton router={router} />
           <Text style={styles.title}>Create Post</Text>
@@ -141,99 +195,90 @@ const NewPost = () => {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            
-            <View style={styles.editorContainer}>
-                {/* User Info */}
-                <View style={styles.userRow}>
-                    <Avatar 
-                        uri={user?.user_metadata?.image} 
-                        size={hp(6)} 
-                        rounded={theme.radius.xl} 
-                    />
-                    <View style={{ gap: 2 }}>
-                        <Text style={styles.username}>
-                            {user?.user_metadata?.full_name || 'User'}
-                        </Text>
-                        <Text style={styles.publicText}>Public</Text>
-                    </View>
-                </View>
-
-                {/* Toolbar */}
-                <RichToolbar 
-                    editor={editorRef}
-                    actions={[
-                        actions.setBold,
-                        actions.setItalic,
-                        actions.insertOrderedList,
-                        actions.insertBulletsList,
-                        actions.alignLeft,
-                        actions.alignCenter,
-                        actions.alignRight,
-                        actions.heading1,
-                    ]}
-                    iconMap={{
-                        [actions.heading1]: ({ tintColor }) => (<Text style={{ color: tintColor }}>H1</Text>),
-                    }}
-                    style={styles.richToolbar}
-                    flatContainerStyle={styles.listStyle}
-                    selectedIconTint={theme.colors.primary}
-                    editor={editorRef}
-                    disabled={false}
-                />
-
-                {/* Rich Editor */}
-                <RichEditor 
-                    ref={editorRef}
-                    containerStyle={styles.editor}
-                    editorStyle={styles.editorContent}
-                    placeholder={"What's on your mind?"}
-                    onChange={(descriptionText) => {
-                        setBody(descriptionText);
-                    }}
-                />
-
-                {/* Media Preview */}
-                {file && (
-                    <View style={styles.filePreview}>
-                        {file.type === 'video' ? (
-                            <Video
-                                ref={videoRef}
-                                style={{ flex: 1 }}
-                                source={{ uri: file.uri }}
-                                useNativeControls
-                                resizeMode={ResizeMode.COVER}
-                                isLooping
-                            />
-                        ) : (
-                            <Image 
-                                source={{ uri: file.uri }} 
-                                style={{ flex: 1 }} 
-                                resizeMode="cover" 
-                            />
-                        )}
-                        
-                        <Pressable style={styles.removeBtn} onPress={removeFile}>
-                            <Feather name="x" size={20} color="white" />
-                        </Pressable>
-                    </View>
-                )}
+          <View style={styles.editorContainer}>
+            <View style={styles.userRow}>
+              <Avatar uri={user?.user_metadata?.image} size={hp(6)} rounded={theme.radius.xl} />
+              <View style={{ gap: 2 }}>
+                <Text style={styles.username}>
+                  {user?.user_metadata?.full_name || 'User'}
+                </Text>
+                <Text style={styles.publicText}>Public</Text>
+              </View>
             </View>
 
+            {mounted && RichToolbar && Platform.OS !== 'web' && (
+              <RichToolbar 
+                editor={editorRef}
+                actions={[
+                  actions?.setBold,
+                  actions?.setItalic,
+                  actions?.insertOrderedList,
+                  actions?.insertBulletsList,
+                  actions?.alignLeft,
+                  actions?.alignCenter,
+                  actions?.alignRight,
+                  actions?.heading1,
+                ]}
+                iconMap={{
+                  [actions?.heading1]: ({ tintColor }) => (<Text style={{ color: tintColor }}>H1</Text>),
+                }}
+                style={styles.richToolbar}
+                flatContainerStyle={styles.listStyle}
+                selectedIconTint={theme.colors.primary}
+              />
+            )}
+
+            {mounted && (RichEditor && Platform.OS !== 'web') ? (
+              <RichEditor 
+                ref={editorRef}
+                containerStyle={styles.editor}
+                editorStyle={styles.editorContent}
+                placeholder={"What's on your mind?"}
+                onChange={(descriptionText) => setBody(descriptionText)}
+              />
+            ) : (
+              <TextInput
+                placeholder="What's on your mind?"
+                style={styles.textInput}
+                multiline
+                placeholderTextColor={theme.colors.textLight}
+                value={body}
+                onChangeText={setBody}
+                textAlignVertical="top"
+              />
+            )}
+
+            {file && (
+              <View style={styles.filePreview}>
+                {file.type === 'video' ? (
+                  <VideoView
+                    player={player}
+                    style={{ flex: 1 }}
+                    allowsFullscreen
+                    allowsPictureInPicture
+                  />
+                ) : (
+                  <Image source={{ uri: file.uri }} style={{ flex: 1 }} resizeMode="cover" />
+                )}
+                <Pressable style={styles.removeBtn} onPress={removeFile}>
+                  <Feather name="x" size={20} color="white" />
+                </Pressable>
+              </View>
+            )}
+          </View>
         </ScrollView>
 
-        {/* Bottom Add Bar */}
         <View style={styles.bottomBar}>
-             <Text style={styles.addText}>Add to your post</Text>
-             <View style={styles.mediaIcons}>
-                <TouchableOpacity onPress={() => onPick('image')}>
-                    <Feather name="image" size={26} color={theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onPick('video')}>
-                    <Feather name="video" size={26} color={theme.colors.dark} />
-                </TouchableOpacity>
-             </View>
+          <Text style={styles.addText}>Add to your post</Text>
+          <View style={styles.mediaIcons}>
+            <TouchableOpacity onPress={() => onPick('image')}>
+              <Feather name="image" size={26} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onPick('video')}>
+              <Feather name="video" size={26} color={theme.colors.dark} />
+            </TouchableOpacity>
+          </View>
         </View>
-
       </View>
     </ScreenWrapper>
   );
@@ -304,6 +349,22 @@ const styles = StyleSheet.create({
   editorContent: {
       color: theme.colors.text, 
       placeholderColor: theme.colors.textLight
+  },
+  textInput: {
+      fontSize: hp(2),
+      color: theme.colors.text,
+      minHeight: hp(20),
+      textAlignVertical: 'top' 
+  },
+  editorPlaceholder: {
+      minHeight: hp(25),
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#f9f9f9',
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: '#eee',
+      borderStyle: 'dashed'
   },
   filePreview: {
       height: hp(35),

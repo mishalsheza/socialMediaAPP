@@ -18,11 +18,10 @@ const Home = () => {
     const [hasMore, setHasMore] = useState(true);
 
     const handlePostEvent = async (payload) => {
-        // Real-time updates could go here in future
         if(payload.eventType === 'INSERT' && payload?.new?.id){
             let newPost = { ...payload.new };
             let res = await supabase.from('users').select('id, name, image').eq('id', newPost.userId).single();
-            newPost.user = res.data;
+            newPost.user = res.data ? res.data : {};
             setPosts(prevPosts => [newPost, ...prevPosts]);
         }
     }
@@ -35,7 +34,7 @@ const Home = () => {
         
         let { data, error } = await supabase
             .from('posts')
-            .select('*, user:users(id, name, image)')
+            .select('*, user:users(id, name, image), postLikes(*), comments(count)')
             .order('created_at', { ascending: false })
             .limit(limit);
 
@@ -59,9 +58,9 @@ const Home = () => {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, handlePostEvent)
         .subscribe();
 
-        // return () => {
-        //     supabase.removeChannel(postChannel);
-        // }
+        return () => {
+            supabase.removeChannel(postChannel);
+        }
     }, []);
 
     return (

@@ -49,6 +49,7 @@ function AppContent() {
       <Stack.Screen name="home" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="editProfile" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="postDetails" />
       {/* Add your other screens here */}
     </Stack>
   );
