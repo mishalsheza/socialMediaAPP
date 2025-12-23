@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet } from 'react-native'
 import { theme } from '../constants/themes'
@@ -7,7 +7,7 @@ const BackButton = ({ size=26, router }) => {
   const navigation = useRouter();
   return (
     <Pressable onPress={()=> navigation.back()} style={styles.button}>
-      <Ionicons name="caret-back-outline" size={size} color={theme.colors.text} />
+      <Feather name="chevron-left" size={size} color={theme.colors.text} />
     </Pressable>
   )
 }

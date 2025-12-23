@@ -1,4 +1,4 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import moment from 'moment';
 import { useEffect, useState } from 'react';
@@ -136,9 +136,10 @@ const PostCard = ({
       <View style={styles.footer}>
         <View style={styles.footerButton}>
           <TouchableOpacity onPress={onLike} disabled={isLiking}>
-            <Ionicons 
-              name={liked ? "heart" : "heart-outline"} 
+            <Feather 
+              name="heart" 
               size={24} 
+              fill={liked ? theme.colors.rose : 'transparent'}
               color={liked ? theme.colors.rose : theme.colors.textLight} 
             />
           </TouchableOpacity>

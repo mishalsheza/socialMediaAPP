@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import moment from 'moment';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { theme } from '../constants/themes';
@@ -45,7 +45,7 @@ const CommentItem = ({
                     {
                         canDelete && (
                             <TouchableOpacity onPress={handleDelete}>
-                                <Ionicons name="trash-outline" size={20} color={theme.colors.rose} />
+                                <Feather name="trash-2" size={20} color={theme.colors.rose} />
                             </TouchableOpacity>
                         )
                     }

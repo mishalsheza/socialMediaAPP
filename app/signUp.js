@@ -1,4 +1,4 @@
-import { Ionicons, Octicons } from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useRef, useState } from 'react'
@@ -82,19 +82,19 @@ console.log({ data, error });
               </Text>
               
               <Input 
-                  icon={<Ionicons name="person-outline" size={26} color={theme.colors.text} />}
+                  icon={<Feather name="user" size={26} color={theme.colors.text} />}
                   placeholder='Enter your name'
                   onChangeText={value=> nameRef.current = value}
               />
 
               <Input 
-                  icon={<Octicons name="mail" size={26} color={theme.colors.text} />}
+                  icon={<Feather name="mail" size={26} color={theme.colors.text} />}
                   placeholder='Enter your email'
                   onChangeText={value=> emailRef.current = value}
               />
   
               <Input 
-                  icon={<Octicons name="lock" size={26} color={theme.colors.text} />}
+                  icon={<Feather name="lock" size={26} color={theme.colors.text} />}
                   placeholder='Enter your password'
                   secureTextEntry
                   onChangeText={value=> passwordRef.current = value}

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import BackButton from '../components/BackButton';
 import CommentItem from '../components/CommentItem';
 import PostCard from '../components/PostCard';
 import ScreenWrapper from '../components/ScreenWrapper';
@@ -126,6 +127,10 @@ const PostDetails = () => {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 30}
             >
                 <View style={styles.container}>
+                    <View style={styles.header}>
+                        <BackButton router={router} />
+                        <Text style={styles.headerTitle}>Post</Text>
+                    </View>
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listStyle}>
                         <PostCard
                             item={{ ...post, comments: [{ count: post?.comments?.length }] }}
@@ -151,7 +156,7 @@ const PostDetails = () => {
                                     </View>
                                 ) : (
                                     <TouchableOpacity style={styles.sendIcon} onPress={onNewComment}>
-                                        <Ionicons name="send" size={hp(2.8)} color={theme.colors.primary} />
+                                        <Feather name="send" size={hp(2.8)} color={theme.colors.primary} />
                                     </TouchableOpacity>
                                 )
                             }
@@ -191,6 +196,20 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'white',
         paddingVertical: hp(0.7),
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: wp(4),
+        paddingBottom: 10,
+        borderBottomWidth: 0.5,
+        borderBottomColor: theme.colors.gray,
+    },
+    headerTitle: {
+        fontSize: hp(2.4),
+        fontWeight: theme.fonts.bold,
+        color: theme.colors.textDark,
     },
     inputContainer: {
         flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { Octicons } from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useRef, useState } from 'react'
@@ -74,7 +74,7 @@ const Login = () => {
             </Text>
             
             <Input 
-                icon={<Octicons name="mail" size={26} color={theme.colors.text} />}
+                icon={<Feather name="mail" size={26} color={theme.colors.text} />}
                 placeholder='Enter your email'
                 autoCapitalize="none"
                 keyboardType="email-address"
@@ -83,7 +83,7 @@ const Login = () => {
 
             <View style={{gap: 10}}>
                 <Input 
-                    icon={<Octicons name="lock" size={26} color={theme.colors.text} />}
+                    icon={<Feather name="lock" size={26} color={theme.colors.text} />}
                     placeholder='Enter your password'
                     secureTextEntry
                     onChangeText={value=> passwordRef.current = value}
