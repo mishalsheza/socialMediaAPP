@@ -14,7 +14,8 @@ const Profile = () => {
   const router = useRouter();
 
   const onLogout = async () => {
-    setAuth(null);
+    // setAuth(null); // Centralized in _layout.js
+    console.log('🚪 Sign out requested');
     const { error } = await supabase.auth.signOut();
     if (error) Alert.alert('Sign out', 'Error signing out!');
   };

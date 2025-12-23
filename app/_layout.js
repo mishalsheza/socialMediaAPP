@@ -24,12 +24,12 @@ function AppContent() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('🔐 Auth changed:', _event);
       
-      if (session) {
-        setAuth(session.user);
+      if (_event === 'SIGNED_IN') {
+        setAuth(session?.user);
         router.replace('/home');
-      } else {
+      } else if (_event === 'SIGNED_OUT') {
         setAuth(null);
-        router.replace('/welcome');
+        router.replace('/signUp');
       }
     });
 

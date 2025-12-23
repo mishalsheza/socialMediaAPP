@@ -3,10 +3,19 @@ import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet } from 'react-native'
 import { theme } from '../constants/themes'
 
-const BackButton = ({ size=26, router }) => {
-  const navigation = useRouter();
+const BackButton = ({ size=26 }) => {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/welcome');
+    }
+  }
+
   return (
-    <Pressable onPress={()=> navigation.back()} style={styles.button}>
+    <Pressable onPress={handleBack} style={styles.button}>
       <Feather name="chevron-left" size={size} color={theme.colors.text} />
     </Pressable>
   )

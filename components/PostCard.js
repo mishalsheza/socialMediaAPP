@@ -2,9 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import moment from 'moment';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
-
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RenderHtml from 'react-native-render-html';
 import { theme } from '../constants/themes';
 import { hp, wp } from '../helpers/common';
@@ -19,6 +17,7 @@ const PostCard = ({
 }) => {
   const [postLikes, setPostLikes] = useState(item?.postLikes || []);
   const [isLiking, setIsLiking] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
     setPostLikes(item?.postLikes || []);
@@ -78,6 +77,38 @@ const PostCard = ({
     
     setIsLiking(false);
   }
+  const onShare = async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+
+    let content = {
+      message: item?.body ? item.body.replace(/<[^>]*>?/gm, '') : 'Check out this post!',
+    };
+
+    try {
+      if (Platform.OS === 'web') {
+        if (navigator.share) {
+          await navigator.share({
+            title: 'Post from microSocial',
+            text: content.message,
+            url: window.location.href,
+          });
+        } else {
+          // Web fallback: copy to clipboard
+          await navigator.clipboard.writeText(`${content.message}\n${window.location.href}`);
+          alert('Link copied to clipboard!');
+        }
+      } else {
+        await Share.share(content);
+      }
+    } catch (error) {
+      console.log('Error sharing: ', error.message);
+      if (Platform.OS !== 'web') Alert.alert('Share', 'Could not share the post');
+    } finally {
+      setIsSharing(false);
+    }
+  }
+
 
   const liked = postLikes?.some(like => like.userId === currentUser?.id);
   const likesCount = postLikes?.length || 0;
@@ -152,10 +183,11 @@ const PostCard = ({
           <Text style={styles.count}>{item?.comments?.[0]?.count || 0}</Text>
         </View>
         <View style={styles.footerButton}>
-          <TouchableOpacity>
-            <Feather name="share-2" size={24} color={theme.colors.textLight} />
-          </TouchableOpacity>
-        </View>
+  <TouchableOpacity onPress={onShare} disabled={isSharing}>
+    <Feather name="share-2" size={24} color={theme.colors.textLight} />
+  </TouchableOpacity>
+</View>
+
       </View>
     </View>
   );
