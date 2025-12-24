@@ -28,6 +28,10 @@ const Home = () => {
         }
     }
 
+    const onDeletePost = (id) => {
+        setPosts(prevPosts => prevPosts.filter(post => post.id !== id));
+    };
+
     const getPosts = async () => {
         // limit = 10 for now
         if(!hasMore) return null;
@@ -141,7 +145,14 @@ const Home = () => {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.listStyle}
                     keyExtractor={item => item.id.toString()}
-                    renderItem={({item}) => <PostCard item={item} currentUser={user} router={router} />}
+                    renderItem={({item}) => (
+                        <PostCard 
+                            item={item} 
+                            currentUser={user} 
+                            router={router} 
+                            onDelete={onDeletePost} 
+                        />
+                    )}
                     ListEmptyComponent={() => (
                         <View style={styles.noPosts}>
                              <Text style={styles.noPostsText}>No posts yet</Text>
