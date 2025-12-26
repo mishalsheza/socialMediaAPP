@@ -32,7 +32,7 @@ export const fetchNotifications = async (receiverId) => {
                     image
                 )
             `)
-            .eq('receiverId', receiverId)
+            .eq('recieverId', receiverId)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -49,18 +49,19 @@ export const fetchNotifications = async (receiverId) => {
 
 export const markNotificationsAsRead = async (receiverId) => {
     try {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('notifications')
             .update({ isRead: true })
-            .eq('receiverId', receiverId)
-            .eq('isRead', false);
+            .eq('recieverId', receiverId)
+            .eq('isRead', false)
+            .select();
 
         if (error) {
             console.log('markNotificationsAsRead error: ', error);
             return { success: false, msg: 'Could not mark notifications as read' };
         }
 
-        return { success: true };
+        return { success: true, data };
     } catch (error) {
         console.log('markNotificationsAsRead error: ', error);
         return { success: false, msg: 'Could not mark notifications as read' };

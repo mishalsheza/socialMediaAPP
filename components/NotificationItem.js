@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   unread: {
-    backgroundColor: 'rgba(52, 199, 89, 0.05)', // Subtle green tint for unread
+    backgroundColor: 'rgba(52, 199, 89, 0.05)',
     borderColor: theme.colors.primary,
   },
   unreadDot: {

@@ -19,7 +19,7 @@ const Notifications = () => {
   useEffect(() => {
     if (user?.id) {
       getNotifications();
-      markNotificationsAsRead(user.id);
+      handleMarkAsRead();
       
       // Real-time subscription for notifications
       const notificationChannel = supabase
@@ -30,7 +30,7 @@ const Notifications = () => {
             event: 'INSERT',
             schema: 'public',
             table: 'notifications',
-            filter: `receiverId=eq.${user.id}`,
+            filter: `recieverId=eq.${user.id}`,
           },
           async (payload) => {
             if (payload.new) {
@@ -41,13 +41,14 @@ const Notifications = () => {
                     .eq('id', payload.new.senderId)
                     .single();
                 
-                const newNotification = {
-                    ...payload.new,
-                    sender: senderData
-                };
+               const newNotification = {
+    ...payload.new,
+    sender: senderData,
+    isRead: true
+};
                 
                 setNotifications(prev => [newNotification, ...prev]);
-                // Mark as read if user is currently on the screen
+                // Mark as read in DB if user is currently on the screen
                 markNotificationsAsRead(user.id);
             }
           }
@@ -59,6 +60,10 @@ const Notifications = () => {
       };
     }
   }, [user]);
+
+  const handleMarkAsRead = async () => {
+    await markNotificationsAsRead(user.id);
+  }
 
   const getNotifications = async () => {
     setLoading(true);

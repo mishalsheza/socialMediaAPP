@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons'
+import { useFocusEffect } from '@react-navigation/native'
 import { useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import Avatar from '../components/Avatar'
 import PostCard from '../components/PostCard'
@@ -117,40 +118,60 @@ const Home = () => {
 
     const [notificationCount, setNotificationCount] = useState(0);
 
+    const getNotificationCount = async () => {
+    if (!user?.id) return;
+    const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('recieverId', user.id)  // Changed from receiver_id
+        .eq('isRead', false);
+    setNotificationCount(count || 0);
+};
+
+    useFocusEffect(
+        useCallback(() => {
+            getNotificationCount();
+        }, [user])
+    );
+
     useEffect(() => {
-        if (!user?.id) return;
+    if (!user?.id) return;
 
-        // Initial count
-        const getCount = async () => {
-            const { count } = await supabase
-                .from('notifications')
-                .select('*', { count: 'exact', head: true })
-                .eq('receiverId', user.id)
-                .eq('isRead', false);
-            setNotificationCount(count || 0);
-        };
-        getCount();
-
-        const channel = supabase
-            .channel(`home-notifications-${user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `receiverId=eq.${user.id}`,
-                },
-                (payload) => {
-                    if (payload.new && !payload.new.isRead) {
-                        setNotificationCount(prev => prev + 1);
-                    }
+    const channel = supabase
+        .channel(`home-notifications-${user.id}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `recieverId=eq.${user.id}`,  // Changed from receiver_id
+            },
+            (payload) => {
+                if (payload.new && !payload.new.isRead) {
+                    setNotificationCount(prev => prev + 1);
                 }
-            )
-            .subscribe();
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `recieverId=eq.${user.id}`,  // Changed from receiver_id
+            },
+            (payload) => {
+                // Refresh count if a notification's read status changed
+                if (payload.new.isRead !== payload.old.isRead) {
+                    getNotificationCount();
+                }
+            }
+        )
+        .subscribe();
 
-        return () => supabase.removeChannel(channel);
-    }, [user]);
+    return () => supabase.removeChannel(channel);
+}, [user]);
 
     return (
         <ScreenWrapper>
@@ -159,14 +180,16 @@ const Home = () => {
                     <Text style={styles.title}>Circl</Text>
                     <View style={styles.icons}>
                         <Pressable onPress={() => {
-                            setNotificationCount(0);
-                            router.push('/notifications');
-                        }}>
+    setNotificationCount(0);
+    router.push('/notifications');
+}}>
                             <View>
                                 <Feather name="heart" size={hp(3.2)} color={theme.colors.text} />
                                 {notificationCount > 0 && (
                                     <View style={styles.pill}>
-                                        <Text style={styles.pillText}>{notificationCount > 9 ? '9+' : notificationCount}</Text>
+                                        <Text style={styles.pillText}>
+                                            {notificationCount > 9 ? '9+' : notificationCount}
+                                        </Text>
                                     </View>
                                 )}
                             </View>

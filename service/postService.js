@@ -21,13 +21,14 @@ export const createPostLike = async (postLike) => {
         const {data: postData} = await supabase.from('posts').select('userId').eq('id', postLike.postId).single();
         
         if(postData && postData.userId !== postLike.userId){
-            await createNotification({
-                senderId: postLike.userId,
-                receiverId: postData.userId,
-                title: 'liked your post',
-                data: JSON.stringify({postId: postLike.postId})
-            });
-        }
+    await createNotification({
+        senderId: postLike.userId,
+        recieverId: postData.userId,
+        title: 'liked your post',
+        data: JSON.stringify({postId: postLike.postId}),
+        isRead: false
+    });
+}
 
         return { success: true, data };
     } catch (error) {
@@ -73,14 +74,14 @@ export const createComment = async (comment) => {
         const {data: postData} = await supabase.from('posts').select('userId').eq('id', comment.postId).single();
         
         if(postData && postData.userId !== comment.userId){
-            await createNotification({
-                senderId: comment.userId,
-                receiverId: postData.userId,
-                title: 'commented on your post',
-                data: JSON.stringify({postId: comment.postId})
-            });
-        }
-
+    await createNotification({
+        senderId: comment.userId,
+        recieverId: postData.userId,
+        title: 'commented on your post',
+        data: JSON.stringify({postId: comment.postId}),
+        isRead: false
+    });
+}
         return { success: true, data };
     } catch (error) {
         console.log('createComment error: ', error);
