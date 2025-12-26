@@ -51,10 +51,12 @@ const EditPost = () => {
   const editorRef = useRef(null);
 
   const player = useVideoPlayer(
-    file?.type === 'video' ? file.uri : (existingFile?.match(/\.(mp4|mov)$/i) ? existingFile : null),
+    file?.type === 'video' ? file.uri : (existingFile?.match(/\.(mp4|mov|m4v|webm|ogv)$/i) || existingFile?.includes('/post-videos/') ? existingFile : null),
     (p) => {
-      p.loop = true;
-      p.play();
+      if (p) {
+        p.loop = true;
+        p.play();
+      }
     }
   );
 
@@ -146,22 +148,35 @@ const EditPost = () => {
       const isImage = fileToUpload.type === 'image';
       const bucket = isImage ? 'uploads' : 'post-videos';
 
+      let fileData;
+      let contentType;
+
+      const response = await fetch(fileToUpload.uri);
+      fileData = await response.blob();
+
+      if (Platform.OS === 'web') {
+        contentType = fileData.type;
+      } else {
+        contentType = fileToUpload.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
+      }
+
+      // Determine clean extension from contentType
       let ext = 'jpg';
-      if (fileToUpload.mimeType) {
-        ext = fileToUpload.mimeType.split('/')[1].replace('jpeg', 'jpg');
+      if (contentType) {
+        const match = contentType.match(/\/([a-zA-Z0-9]+)/);
+        if (match) {
+          ext = match[1].replace('jpeg', 'jpg');
+        }
       } else if (!isImage) {
         ext = 'mp4';
       }
 
       const fileName = `${Date.now()}.${ext}`;
       const filePath = `${user?.id}/${fileName}`;
-      const contentType = fileToUpload.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
 
-      let fileData;
-      const response = await fetch(fileToUpload.uri);
-      fileData = await response.blob();
+      console.log('⬆️ Uploading to Supabase (Edit):', { bucket, filePath, contentType });
 
-      const { error } = await supabase.storage
+      const { data: uploadData, error } = await supabase.storage
         .from(bucket)
         .upload(filePath, fileData, {
           contentType,
@@ -186,8 +201,8 @@ const EditPost = () => {
     try {
       if (!fileUrl) return;
 
-      const isVideo = fileUrl.match(/\.(mp4|mov)$/i);
-      const bucket = isVideo ? 'post-videos' : 'uploads';
+      const isVideoType = fileUrl.match(/\.(mp4|mov|m4v|webm|ogv)$/i) || fileUrl.includes('/post-videos/');
+      const bucket = isVideoType ? 'post-videos' : 'uploads';
       const fileName = fileUrl.split('/').pop();
       const filePath = `${user?.id}/${fileName}`;
 
@@ -272,7 +287,7 @@ const EditPost = () => {
 
   const displayFile = file || existingFile;
   const isDisplayVideo = typeof displayFile === 'string' 
-    ? displayFile.match(/\.(mp4|mov)$/i) 
+    ? (displayFile.match(/\.(mp4|mov|m4v|webm|ogv)$/i) || displayFile.includes('/post-videos/'))
     : displayFile?.type === 'video';
 
   return (

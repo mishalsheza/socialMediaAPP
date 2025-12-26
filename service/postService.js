@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { createNotification } from "./notificationService";
 
 export const createPostLike = async (postLike) => {
     try {
@@ -11,6 +12,21 @@ export const createPostLike = async (postLike) => {
         if (error) {
             console.log('postLike error: ', error);
             return { success: false, msg: 'Could not like the post' };
+        }
+
+        // Trigger notification for post owner
+        // We need to fetch the post owner ID if not provided, but usually it's in the item
+        // For simplicity, let's assume the caller will handle notifications if they have post owner ID,
+        // or we fetch it here. Let's fetch the post to get the owner.
+        const {data: postData} = await supabase.from('posts').select('userId').eq('id', postLike.postId).single();
+        
+        if(postData && postData.userId !== postLike.userId){
+            await createNotification({
+                senderId: postLike.userId,
+                receiverId: postData.userId,
+                title: 'liked your post',
+                data: JSON.stringify({postId: postLike.postId})
+            });
         }
 
         return { success: true, data };
@@ -51,6 +67,18 @@ export const createComment = async (comment) => {
         if (error) {
             console.log('createComment error: ', error);
             return { success: false, msg: 'Could not create the comment' };
+        }
+
+        // Trigger notification for post owner
+        const {data: postData} = await supabase.from('posts').select('userId').eq('id', comment.postId).single();
+        
+        if(postData && postData.userId !== comment.userId){
+            await createNotification({
+                senderId: comment.userId,
+                receiverId: postData.userId,
+                title: 'commented on your post',
+                data: JSON.stringify({postId: comment.postId})
+            });
         }
 
         return { success: true, data };

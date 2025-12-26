@@ -89,47 +89,38 @@ const NewPost = () => {
 
 const uploadFile = async (fileToUpload) => {
   try {
-    console.log('🔵 Starting upload for:', fileToUpload);
-    
     const isImage = fileToUpload.type === 'image';
     const bucket = isImage ? 'uploads' : 'post-videos';
 
-    // Determine file extension
+    let fileData;
+    let contentType;
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(fileToUpload.uri);
+      fileData = await response.blob();
+      contentType = fileData.type;
+    } else {
+      const response = await fetch(fileToUpload.uri);
+      fileData = await response.blob();
+      contentType = fileToUpload.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
+    }
+
+    // Determine clean extension from contentType
     let ext = 'jpg';
-    if (fileToUpload.mimeType) {
-      ext = fileToUpload.mimeType.split('/')[1].replace('jpeg', 'jpg');
+    if (contentType) {
+      // Extract part after slash and strip anything that isn't alphanumeric
+      const match = contentType.match(/\/([a-zA-Z0-9]+)/);
+      if (match) {
+        ext = match[1].replace('jpeg', 'jpg');
+      }
     } else if (!isImage) {
       ext = 'mp4';
     }
 
     const fileName = `${Date.now()}.${ext}`;
     const filePath = `${user.id}/${fileName}`;
-    const contentType = fileToUpload.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
 
-    console.log('📂 Bucket:', bucket);
-    console.log('📁 Path:', filePath);
-    console.log('📄 Content-Type:', contentType);
-
-    let fileData;
-
-    if (Platform.OS === 'web') {
-      // Web: Use fetch and blob
-      console.log('🌐 Web upload');
-      const response = await fetch(fileToUpload.uri);
-      fileData = await response.blob();
-    } else {
-      // Mobile: Use fetch with the asset URI directly
-      console.log('📱 Mobile upload');
-      console.log('📱 File URI:', fileToUpload.uri);
-      
-      // For mobile, we can use fetch directly on the file URI
-      const response = await fetch(fileToUpload.uri);
-      fileData = await response.blob();
-      
-      console.log('✅ Blob created:', fileData.size, 'bytes');
-    }
-
-    console.log('⬆️ Uploading to Supabase...');
+    console.log('⬆️ Uploading to Supabase:', { bucket, filePath, contentType });
 
     const { data: uploadData, error } = await supabase.storage
       .from(bucket)

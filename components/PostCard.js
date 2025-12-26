@@ -41,11 +41,16 @@ const PostCard = ({
 
   const isMyPost = currentUser?.id === item?.userId;
   const createdAt = moment(item?.created_at).fromNow();
-  const isVideo = /\.(mp4|mov)$/i.test(item?.file || '');
+
+  // Improved video detection
+  const isVideo = /\.(mp4|mov|m4v|webm|ogv)$/i.test(item?.file || '') || 
+                  (item?.file || '').includes('/post-videos/');
 
   const player = useVideoPlayer(isVideo ? item?.file : null, (p) => {
-    p.loop = true;
-    p.play();
+    if (p) {
+      p.loop = true;
+      p.play();
+    }
   });
 
   const liked = postLikes.some((l) => l.userId === currentUser?.id);
@@ -146,7 +151,6 @@ const PostCard = ({
 
   return (
     <View style={[styles.container, hasShadow && styles.shadow]}>
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <Avatar size={hp(4.5)} uri={item?.user?.image} rounded={theme.radius.md} />
@@ -155,15 +159,12 @@ const PostCard = ({
             <Text style={styles.time}>{createdAt}</Text>
           </View>
         </View>
-
         {isMyPost && (
           <TouchableOpacity onPress={openMenu} disabled={isDeleting}>
             <Feather name="more-horizontal" size={hp(3.4)} color={theme.colors.text} />
           </TouchableOpacity>
         )}
       </View>
-
-      {/* BODY */}
       {item?.body && (
         <View style={styles.bodyWrapper}>
           <RenderHtml
@@ -173,8 +174,6 @@ const PostCard = ({
           />
         </View>
       )}
-
-      {/* MEDIA */}
       {item?.file && (
         <View style={styles.mediaWrapper}>
           {isVideo ? (
@@ -189,8 +188,6 @@ const PostCard = ({
           )}
         </View>
       )}
-
-      {/* FOOTER */}
       <View style={styles.footer}>
         <View style={styles.footerButton}>
           <TouchableOpacity onPress={onLike}>
@@ -198,11 +195,11 @@ const PostCard = ({
               name="heart"
               size={24}
               color={liked ? theme.colors.rose : theme.colors.textLight}
+              fill={liked ? theme.colors.rose : 'transparent'}
             />
           </TouchableOpacity>
           <Text style={styles.count}>{likesCount}</Text>
         </View>
-
         <View style={styles.footerButton}>
           <TouchableOpacity
             onPress={() =>
@@ -213,13 +210,10 @@ const PostCard = ({
           </TouchableOpacity>
           <Text style={styles.count}>{item?.comments?.[0]?.count || 0}</Text>
         </View>
-
         <TouchableOpacity onPress={onShare} disabled={isSharing}>
           <Feather name="share-2" size={24} color={theme.colors.textLight} />
         </TouchableOpacity>
       </View>
-
-      {/* MENU */}
       <Modal visible={showMenu} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setShowMenu(false)}>
           <View style={styles.menu}>
@@ -227,14 +221,10 @@ const PostCard = ({
               <Feather name="edit-2" size={20} />
               <Text style={styles.menuText}>Edit Post</Text>
             </TouchableOpacity>
-
             <View style={styles.divider} />
-
             <TouchableOpacity style={styles.menuItem} onPress={onDeletePost}>
               <Feather name="trash-2" size={20} color={theme.colors.rose} />
-              <Text style={[styles.menuText, { color: theme.colors.rose }]}>
-                Delete Post
-              </Text>
+              <Text style={[styles.menuText, { color: theme.colors.rose }]}>Delete Post</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

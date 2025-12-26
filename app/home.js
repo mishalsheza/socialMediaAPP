@@ -115,43 +115,77 @@ const Home = () => {
         }
     }, []);
 
+    const [notificationCount, setNotificationCount] = useState(0);
+
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Initial count
+        const getCount = async () => {
+            const { count } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('receiverId', user.id)
+                .eq('isRead', false);
+            setNotificationCount(count || 0);
+        };
+        getCount();
+
+        const channel = supabase
+            .channel(`home-notifications-${user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `receiverId=eq.${user.id}`,
+                },
+                (payload) => {
+                    if (payload.new && !payload.new.isRead) {
+                        setNotificationCount(prev => prev + 1);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => supabase.removeChannel(channel);
+    }, [user]);
+
     return (
         <ScreenWrapper>
             <View style={styles.container}>
-                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Circl</Text>
                     <View style={styles.icons}>
-                        <Pressable onPress={() => router.push('/notifications')}>
-                            <Feather name="heart" size={hp(3.2)} color={theme.colors.text} />
+                        <Pressable onPress={() => {
+                            setNotificationCount(0);
+                            router.push('/notifications');
+                        }}>
+                            <View>
+                                <Feather name="heart" size={hp(3.2)} color={theme.colors.text} />
+                                {notificationCount > 0 && (
+                                    <View style={styles.pill}>
+                                        <Text style={styles.pillText}>{notificationCount > 9 ? '9+' : notificationCount}</Text>
+                                    </View>
+                                )}
+                            </View>
                         </Pressable>
                         <Pressable onPress={() => router.push('/newPost')}>
                             <Feather name="plus-square" size={hp(3.2)} color={theme.colors.text} />
                         </Pressable>
                         <Pressable onPress={() => router.push('/profile')}>
-                            <Avatar
-                                uri={user?.user_metadata?.image}
-                                size={hp(4.3)}
-                                rounded={true}
-                                style={{ borderWidth: 2 }}
-                            />
+                            <Avatar uri={user?.user_metadata?.image} size={hp(4.3)} rounded={true} style={{ borderWidth: 2 }} />
                         </Pressable>
                     </View>
                 </View>
-
-                {/* Posts Feed */}
                 <FlatList 
                     data={posts}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.listStyle}
                     keyExtractor={item => item.id.toString()}
                     renderItem={({item}) => (
-                        <PostCard 
-                            item={item} 
-                            currentUser={user} 
-                            router={router} 
-                            onDelete={onDeletePost} 
-                        />
+                        <PostCard item={item} currentUser={user} router={router} onDelete={onDeletePost} />
                     )}
                     ListEmptyComponent={() => (
                         <View style={styles.noPosts}>
@@ -202,5 +236,21 @@ const styles = StyleSheet.create({
         fontSize: hp(2), 
         color: theme.colors.text, 
         fontWeight: theme.fonts.medium
+    },
+    pill: {
+        position: 'absolute',
+        right: -8,
+        top: -4,
+        height: hp(2.2),
+        width: hp(2.2),
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 20,
+        backgroundColor: theme.colors.rose
+    },
+    pillText: {
+        color: 'white',
+        fontSize: hp(1.2),
+        fontWeight: theme.fonts.bold
     }
 })
